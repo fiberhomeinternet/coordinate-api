@@ -1,16 +1,16 @@
 from flask import Flask, request, jsonify
+from flask_cors import CORS
 from urllib.parse import unquote
 import re
 from pyproj import Transformer
 
 app = Flask(__name__)
+CORS(app)  # Enable CORS for all routes
 
-# Home route to avoid 404 on /
 @app.route('/')
 def home():
     return "✅ Coordinate Conversion API is running!"
 
-# Convert DMS string to decimal
 def dms_to_decimal(dms_str):
     match = re.match(r"(\d+)[°:\s]+(\d+)'[\s]*(\d+(?:\.\d+)?)?\"?[\s]*([NSEW])", dms_str.strip(), re.IGNORECASE)
     if not match:
@@ -21,26 +21,21 @@ def dms_to_decimal(dms_str):
         decimal = -decimal
     return decimal
 
-# Extract coordinates from various formats
 def extract_coords_from_link(text):
     decoded = unquote(text.strip())
 
-    # Match @lat,lon
     match = re.search(r'@([0-9.\-]+),([0-9.\-]+)', decoded)
     if match:
         return float(match.group(1)), float(match.group(2))
 
-    # Match q=lat,lon
     match = re.search(r'q=([0-9.\-]+),([0-9.\-]+)', decoded)
     if match:
         return float(match.group(1)), float(match.group(2))
 
-    # Match plain decimal coords
     match = re.match(r'^\s*([0-9.\-]+)\s*[, ]\s*([0-9.\-]+)\s*$', decoded)
     if match:
         return float(match.group(1)), float(match.group(2))
 
-    # Match DMS format
     dms_matches = re.findall(r'\d+°\d+\'\d+(?:\.\d+)?["]?[NSEW]', decoded)
     if len(dms_matches) == 2:
         lat = dms_to_decimal(dms_matches[0])
@@ -50,13 +45,11 @@ def extract_coords_from_link(text):
 
     return None
 
-# Convert WGS84 to ITM (Israeli Transverse Mercator)
 def wgs84_to_itm(lat, lon):
     transformer = Transformer.from_crs("EPSG:4326", "EPSG:2039", always_xy=True)
     x, y = transformer.transform(lon, lat)
     return round(x), round(y)
 
-# Main API endpoint
 @app.route('/convert', methods=['GET'])
 def convert():
     link = request.args.get('input')
@@ -77,6 +70,5 @@ def convert():
         "itm_y": y
     })
 
-# Run on 0.0.0.0 and port 10000 for Render compatibility
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=10000)
